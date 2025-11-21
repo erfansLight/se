@@ -1,3 +1,7 @@
+package org.example.app.models;
+
+import org.example.app.users.Student;
+
 import java.time.LocalDate;
 
 public class Loan {

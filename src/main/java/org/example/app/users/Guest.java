@@ -1,3 +1,5 @@
+package org.example.app.users;
+
 public class Guest {
     public void showMenu() {
         System.out.println("\n=== منوی مهمان ===");

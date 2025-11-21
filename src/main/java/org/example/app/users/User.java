@@ -1,3 +1,5 @@
+package org.example.app.users;
+
 import java.util.Objects;
 
 public abstract class User {

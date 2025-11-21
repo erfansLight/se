@@ -1,3 +1,5 @@
+package org.example.app.models;
+
 public class Book {
     private static int counter = 1;
     private final int id;

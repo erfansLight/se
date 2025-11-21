@@ -1,3 +1,14 @@
+package org.example.app.system;
+
+import org.example.app.models.Book;
+import org.example.app.models.Loan;
+import org.example.app.models.LoanRequest;
+import org.example.app.models.LoanStatus;
+import org.example.app.users.Admin;
+import org.example.app.users.Employee;
+import org.example.app.users.Guest;
+import org.example.app.users.Student;
+
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -66,7 +77,7 @@ public class LibrarySystem {
         }
     }
 
-    // ---------- Guest ----------
+    // ---------- org.example.app.users.Guest ----------
     private void guestMenu() {
         Guest guest = new Guest();
         while (true) {
@@ -97,7 +108,7 @@ public class LibrarySystem {
         System.out.println("تعداد کتاب‌هایی که در حال حاضر امانت داده شده‌اند: " + currentlyLoaned);
     }
 
-    // ---------- Student ----------
+    // ---------- org.example.app.users.Student ----------
     private void registerStudent() {
         System.out.println("\n=== ثبت نام دانشجو ===");
         System.out.print("نام کاربری: ");
@@ -196,7 +207,7 @@ public class LibrarySystem {
         return new ArrayList<>(set);
     }
 
-    // ---------- Employee ----------
+    // ---------- org.example.app.users.Employee ----------
     private void employeeLogin() {
         System.out.print("نام کاربری کارمند: ");
         String user = sc.nextLine().trim();
@@ -270,7 +281,7 @@ public class LibrarySystem {
                     String ar = sc.nextLine().trim();
                     if (ar.equalsIgnoreCase("a")) {
                         target.approve(e);
-                        // ساخت Loan
+                        // ساخت org.example.app.models.Loan
                         Loan loan = new Loan(target.getStudent(), target.getBook(), target.getStartDate());
                         loans.add(loan);
                         target.getStudent().addLoan(loan);
@@ -323,7 +334,7 @@ public class LibrarySystem {
         }
     }
 
-    // ---------- Admin ----------
+    // ---------- org.example.app.users.Admin ----------
     private void adminLogin() {
         System.out.print("نام کاربری مدیر: ");
         String user = sc.nextLine().trim();

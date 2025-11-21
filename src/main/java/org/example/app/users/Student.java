@@ -1,3 +1,7 @@
+package org.example.app.users;
+
+import org.example.app.models.Loan;
+
 import java.util.ArrayList;
 import java.util.List;
 

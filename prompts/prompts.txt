@@ -1,0 +1,7 @@
+phase1:
+1- i have a java project and need your help . please be so careful about OOP and do just like what
+i will send you.
+phase2:
+1-  i want make this project a maven project. it is not maven now just a normal java project.
+   well step by step tell me how make it a maven project.
+2- i need also test unit for each class. i will send you my classes then give me test unit.
