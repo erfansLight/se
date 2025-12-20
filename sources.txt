@@ -1,0 +1,16 @@
+src/main/java/edu/example/library/exception/BookNotAvailableException.java
+src/main/java/edu/example/library/exception/InvalidRequestStatusException.java
+src/main/java/edu/example/library/exception/InvalidStudentStatusException.java
+src/main/java/edu/example/library/Main.java
+src/main/java/edu/example/library/model/Book.java
+src/main/java/edu/example/library/model/BookStatus.java
+src/main/java/edu/example/library/model/BorrowRequest.java
+src/main/java/edu/example/library/model/RequestStatus.java
+src/main/java/edu/example/library/model/User.java
+src/main/java/edu/example/library/model/UserRole.java
+src/main/java/edu/example/library/service/AuthService.java
+src/main/java/edu/example/library/service/BookService.java
+src/main/java/edu/example/library/service/BorrowService.java
+src/main/java/edu/example/library/service/LibraryStats.java
+src/main/java/edu/example/library/service/ReportService.java
+src/main/java/edu/example/library/service/StudentReport.java

@@ -1,0 +1,10 @@
+LLM: ChatGPT (GPT-5.2 Thinking)
+
+Commit message prefix: SE1_P_2
+
+Prompts/Notes:
+- Fixed Maven test directory to src/test/java
+- Strengthened unit tests for authentication, book search, borrow management, and reporting scenarios
+- Fixed ReportService calculations (StudentReport + LibraryStats)
+- Enforced approve rule (start date must be today or yesterday)
+- Updated receive() to return book to AVAILABLE and prevent double receive

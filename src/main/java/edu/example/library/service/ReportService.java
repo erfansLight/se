@@ -14,18 +14,36 @@ public class ReportService {
         this.borrowService = bs; this.bookService = bks; this.authService = as;
     }
     public StudentReport studentReport(String username){
-        List<BorrowRequest> reqs = borrowService.forStudent(username);
-        long total = reqs.size();
-        long notReturned = reqs.stream().filter(r-> r.getReceivedAt()==null).count();
-        long delayed = reqs.stream().filter(r-> r.getReceivedAt()!=null && r.getReceivedAt().isAfter(r.getTo())).count();
-        return new StudentReport(username, total, notReturned, delayed);
-    }
+    List<BorrowRequest> reqs = borrowService.forStudent(username);
+
+    // Only approved requests count as actual borrows (loans).
+    List<BorrowRequest> approved = reqs.stream()
+            .filter(r -> r.getStatus() == RequestStatus.APPROVED)
+            .toList();
+
+    long total = approved.size();
+    long notReturned = approved.stream().filter(r -> r.getReceivedAt() == null).count();
+    long delayed = approved.stream()
+            .filter(r -> r.getReceivedAt() != null && r.getReceivedAt().isAfter(r.getTo()))
+            .count();
+
+    return new StudentReport(username, total, notReturned, delayed);
+}
     public LibraryStats libraryStats(){
-        Collection<BorrowRequest> reqs = borrowService.allRequests();
-        double avgDays = reqs.stream().filter(r-> r.getReceivedAt()!=null)
-            .mapToLong(r-> ChronoUnit.DAYS.between(r.getReceivedAt(), r.getTo()))
-            .map(Math::abs)
-            .average().orElse(0.0);
-        return new LibraryStats(reqs.size(), (int) reqs.stream().filter(r->r.getStatus()==RequestStatus.APPROVED).count(), avgDays);
-    }
+    Collection<BorrowRequest> reqs = borrowService.allRequests();
+
+    int totalRequests = reqs.size();
+    int totalApproved = (int) reqs.stream()
+            .filter(r -> r.getStatus() == RequestStatus.APPROVED)
+            .count();
+
+    // Average days a book was borrowed = from (borrow start) until receivedAt (return date)
+    double avgDays = reqs.stream()
+            .filter(r -> r.getStatus() == RequestStatus.APPROVED && r.getReceivedAt() != null)
+            .mapToLong(r -> Math.abs(ChronoUnit.DAYS.between(r.getFrom(), r.getReceivedAt())))
+            .average()
+            .orElse(0.0);
+
+    return new LibraryStats(totalRequests, totalApproved, avgDays);
+}
 }
