@@ -1,86 +1,140 @@
 package edu.example.library.service;
 
-import edu.example.library.exception.*;
-import edu.example.library.model.*;
+import edu.example.library.entity.*;
+import edu.example.library.exception.ApiException;
+import edu.example.library.repo.BookRepository;
+import edu.example.library.repo.BorrowRequestRepository;
+import edu.example.library.repo.StudentRepository;
+import edu.example.library.repo.UserAccountRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
+@Service
 public class BorrowService {
-    private final Map<String, BorrowRequest> requests = new LinkedHashMap<>();
-    private int counter = 1;
-    private final BookService bookService;
-    private final AuthService authService;
-    public BorrowService(BookService bs, AuthService as){ this.bookService = bs; this.authService = as; }
-    public BorrowRequest createRequest(String studentUsername, String bookId, LocalDate from, LocalDate to){
-        User u = authService.getUser(studentUsername);
-        if(u==null) throw new InvalidStudentStatusException("Student does not exist");
-        if(!u.isActive()) throw new InvalidStudentStatusException("Student inactive");
-        Book b = bookService.getById(bookId);
-        if(b==null) throw new BookNotAvailableException("Book not found");
-        if(b.getStatus()==BookStatus.BORROWED) throw new BookNotAvailableException("Book already borrowed");
-        String id = "R"+(counter++);
-        BorrowRequest r = new BorrowRequest(id, studentUsername, bookId, from, to);
-        requests.put(id, r);
-        return r;
-    }
-    /**
- * Approve a request using the system date (LocalDate.now()).
- * For deterministic tests or custom flows, use approve(requestId, approvalDate).
- */
-public BorrowRequest approve(String requestId){
-    return approve(requestId, LocalDate.now());
-}
 
-/**
- * Approves only requests whose start date (from) is either the approval date (today)
- * or the day before (yesterday), as required by the scenario.
- */
-public BorrowRequest approve(String requestId, LocalDate approvalDate){
-    BorrowRequest r = requests.get(requestId);
-    if(r==null) throw new InvalidRequestStatusException("Request not found");
-    if(r.getStatus()!=RequestStatus.PENDING) throw new InvalidRequestStatusException("Request not pending");
+    private final BorrowRequestRepository borrowRepo;
+    private final StudentRepository studentRepo;
+    private final BookRepository bookRepo;
+    private final UserAccountRepository userRepo;
 
-    // rule: only approve if start date is today or yesterday
-    if(!(r.getFrom().equals(approvalDate) || r.getFrom().equals(approvalDate.minusDays(1)))){
-        throw new InvalidRequestStatusException("Request start date must be today or yesterday");
+    public BorrowService(BorrowRequestRepository borrowRepo,
+                         StudentRepository studentRepo,
+                         BookRepository bookRepo,
+                         UserAccountRepository userRepo) {
+        this.borrowRepo = borrowRepo;
+        this.studentRepo = studentRepo;
+        this.bookRepo = bookRepo;
+        this.userRepo = userRepo;
     }
 
-    Book b = bookService.getById(r.getBookId());
-    if(b==null) throw new BookNotAvailableException("Book not found");
-    if(b.getStatus()==BookStatus.BORROWED) throw new BookNotAvailableException("Book already borrowed");
-
-    r.setStatus(RequestStatus.APPROVED);
-    bookService.setStatus(b.getId(), BookStatus.BORROWED);
-    return r;
-}
-
-/**
- * Receives (returns) an approved borrowed book and records the receive date.
- * After receiving, the related book becomes AVAILABLE again.
- */
-public void receive(String requestId, LocalDate receivedDate){
-    BorrowRequest r = requests.get(requestId);
-    if(r==null) throw new InvalidRequestStatusException("Request not found");
-    if(r.getStatus()!=RequestStatus.APPROVED) throw new InvalidRequestStatusException("Request must be approved first");
-    if(r.getReceivedAt()!=null) throw new InvalidRequestStatusException("Book already received");
-    r.setReceivedAt(receivedDate);
-
-    Book b = bookService.getById(r.getBookId());
-    if(b!=null){
-        bookService.setStatus(b.getId(), BookStatus.AVAILABLE);
+    private UserAccount currentUser() {
+        Authentication a = SecurityContextHolder.getContext().getAuthentication();
+        if (a == null || !(a.getPrincipal() instanceof edu.example.library.config.UserPrincipal p)) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication required");
+        }
+        return p.getUser();
     }
-}
 
-public Collection<BorrowRequest> allRequests(){ return requests.values(); }
-    public List<BorrowRequest> forStudent(String studentUsername){
-        return requests.values().stream().filter(r->r.getStudentUsername().equals(studentUsername)).collect(Collectors.toList());
+    private StudentProfile currentStudent() {
+        UserAccount user = currentUser();
+        if (user.getRole() != Role.STUDENT) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Student role required");
+        }
+        StudentProfile student = studentRepo.findByUserId(user.getId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "STUDENT_NOT_FOUND", "Student profile not found"));
+        if (!student.isActive()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "STUDENT_INACTIVE", "Student is inactive");
+        }
+        return student;
     }
-    public void seedRequest(BorrowRequest r){
-        requests.put(r.getId(), r);
+
+    @Transactional
+    public BorrowRequest createRequest(Long bookId) {
+        StudentProfile student = currentStudent();
+        Book book = bookRepo.findById(bookId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND", "Book not found"));
+        BorrowRequest br = new BorrowRequest(student, book);
+        return borrowRepo.save(br);
+    }
+
+    public List<BorrowRequest> pendingRequests() {
+        return borrowRepo.findByStatus(BorrowStatus.PENDING);
+    }
+
+    public BorrowRequest get(Long id) {
+        return borrowRepo.findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "BORROW_NOT_FOUND", "Borrow request not found"));
+    }
+
+    @Transactional
+    public BorrowRequest approve(Long requestId) {
+        UserAccount staff = currentUser();
+        if (staff.getRole() == Role.STUDENT) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Employee/Admin role required");
+        }
+        BorrowRequest br = get(requestId);
+        if (br.getStatus() != BorrowStatus.PENDING) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_STATE", "Only pending requests can be approved");
+        }
+        Book book = br.getBook();
+        if (book.getAvailableCopies() <= 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "NO_COPIES", "No available copies for this book");
+        }
+        book.setAvailableCopies(book.getAvailableCopies() - 1);
+        bookRepo.save(book);
+
+        br.setStatus(BorrowStatus.APPROVED);
+        br.setApprovedAt(Instant.now());
+        br.setApprovedBy(staff);
+        br.setDueDate(LocalDate.now().plusDays(14));
+        return borrowRepo.save(br);
+    }
+
+    @Transactional
+    public BorrowRequest reject(Long requestId, String reason) {
+        UserAccount staff = currentUser();
+        if (staff.getRole() == Role.STUDENT) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Employee/Admin role required");
+        }
+        BorrowRequest br = get(requestId);
+        if (br.getStatus() != BorrowStatus.PENDING) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_STATE", "Only pending requests can be rejected");
+        }
+        br.setStatus(BorrowStatus.REJECTED);
+        br.setRejectedBy(staff);
+        br.setRejectionReason(reason);
+        return borrowRepo.save(br);
+    }
+
+    @Transactional
+    public BorrowRequest markReturned(Long borrowId) {
+        UserAccount staff = currentUser();
+        if (staff.getRole() == Role.STUDENT) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Employee/Admin role required");
+        }
+        BorrowRequest br = get(borrowId);
+        if (br.getStatus() != BorrowStatus.APPROVED) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_STATE", "Only approved borrows can be returned");
+        }
+        br.setStatus(BorrowStatus.RETURNED);
+        br.setReturnedAt(Instant.now());
+        br.setReturnedBy(staff);
+
+        Book book = br.getBook();
+        book.setAvailableCopies(book.getAvailableCopies() + 1);
+        bookRepo.save(book);
+
+        return borrowRepo.save(br);
+    }
+
+    public List<BorrowRequest> historyForStudent(Long studentId) {
+        return borrowRepo.findByStudentIdOrderByRequestedAtDesc(studentId);
     }
 }
